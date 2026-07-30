@@ -7,18 +7,17 @@ app = Flask(__name__)
 @app.route('/api/gold')
 def get_gold_data():
     try:
-        # Doğrudan piyasa verisi sağlayan alternatif endpoint
+        # Render sunucularının engellenmediği alternatif bir finans veri kaynağı
         url = "https://api.genelpara.com/embed/altin.json"
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://www.google.com/"
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
         }
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=8)
         
         if response.status_code == 200:
             data = response.json()
             gram = data.get('GA', {})
-            if gram and 'alis' in gram:
+            if gram and 'alis' in gram and float(gram.get('alis', 0)) > 0:
                 return jsonify({
                     'success': True,
                     'data': {
@@ -29,9 +28,9 @@ def get_gold_data():
                     }
                 })
         
-        # Eğer genelpara yanıt vermezse alternatif serbest piyasa verisi
-        fallback_url = "https://finans.truncgil.com/today.json"
-        res2 = requests.get(fallback_url, headers=headers, timeout=5)
+        # Eğer ilk API boş dönerse alternatif olarak Bigpara/Harem altın verisi çeken yedek kaynak
+        backup_url = "https://finans.truncgil.com/today.json"
+        res2 = requests.get(backup_url, headers=headers, timeout=8)
         d2 = res2.json()
         ga = d2.get('Gram Altın', {})
         
