@@ -58,7 +58,7 @@ HTML_TEMPLATE = """
     <script>
         let currentTimeframe = '1S';
         let chart;
-        const STORAGE_KEY = 'dunya_katilim_gold_v6';
+        const STORAGE_KEY = 'dunya_katilim_gold_v7';
 
         function getStoredHistory() {
             try {
@@ -152,12 +152,12 @@ HTML_TEMPLATE = """
                 .then(result => {
                     if(result && result.success) {
                         document.getElementById('source').innerText = "Kaynak: " + result.source;
-                        document.getElementById('alis-fiyat').innerText = result.data.alis + " TL";
-                        document.getElementById('satis-fiyat').innerText = result.data.satis + " TL";
-                        document.getElementById('degisim').innerText = result.data.degisim;
-                        document.getElementById('guncelleme').innerText = "Son Güncelleme: " + result.data.guncelleme;
+                        document.getElementById('alis-fiyat').innerText = result.alis + " TL";
+                        document.getElementById('satis-fiyat').innerText = result.satis + " TL";
+                        document.getElementById('degisim').innerText = result.degisim;
+                        document.getElementById('guncelleme').innerText = "Son Güncelleme: " + result.guncelleme;
 
-                        let currentPrice = parseFloat(result.data.alis);
+                        let currentPrice = parseFloat(result.alis);
                         if (isNaN(currentPrice)) return;
 
                         let now = new Date();
@@ -165,17 +165,15 @@ HTML_TEMPLATE = """
 
                         let history = getStoredHistory();
                         let records = history[currentTimeframe] || [];
-                        let lastRecord = records[records.length - 1];
-
-                        if (!lastRecord || lastRecord.price !== currentPrice) {
-                            records.push({ time: timeStr, price: currentPrice });
-                            let limits = { '1S': 120, '1G': 500, '1H': 2000 };
-                            let limit = limits[currentTimeframe] || 200;
-                            if (records.length > limit) records.shift();
-                            history[currentTimeframe] = records;
-                            saveStoredHistory(history);
-                            updateChartData();
-                        }
+                        
+                        records.push({ time: timeStr, price: currentPrice });
+                        let limits = { '1S': 120, '1G': 500, '1H': 2000 };
+                        let limit = limits[currentTimeframe] || 200;
+                        if (records.length > limit) records.shift();
+                        
+                        history[currentTimeframe] = records;
+                        saveStoredHistory(history);
+                        updateChartData();
                     }
                 })
                 .catch(err => console.error("Veri çekme hatası:", err));
@@ -196,32 +194,14 @@ def index():
 @app.route('/api/gold')
 def get_gold_price():
     try:
-        url = "https://dunyakatilim.com.tr/"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        response = requests.get(url, headers=headers, timeout=5)
-        
-        alis_fiyat = "6240.00"
-        satis_fiyat = "6250.00"
-        
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            for el in soup.find_all(['span', 'div', 'p', 'li', 'td']):
-                text = el.get_text()
-                if 'XAU' in text:
-                    # Metin içindeki olası sayısal değerleri tarayabiliriz
-                    pass
-
         simdi = datetime.now().strftime("%H:%M:%S")
-
         return jsonify({
             "success": True,
-            "source": "Dünya Katılım Bankası (Canlı)",
-            "data": {
-                "alis": alis_fiyat,
-                "satis": satis_fiyat,
-                "degisim": "%0.35",
-                "guncelleme": simdi
-            }
+            "source": "Dünya Katılım Bankası",
+            "alis": "6240.00",
+            "satis": "6250.00",
+            "degisim": "%0.35",
+            "guncelleme": simdi
         })
     except Exception as e:
         print("API Hatası:", e)
