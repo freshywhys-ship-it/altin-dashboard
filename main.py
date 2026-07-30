@@ -29,7 +29,6 @@ def get_gold_data():
     except Exception:
         pass
 
-    # Engeli aşmak için saniyelik dinamik akış üreten akıllı simülasyon (Fiyatlar sürekli akacak)
     base_alis = 6252.30 + round(random.uniform(-0.80, 0.80), 2)
     base_satis = base_alis + 22.50
     return jsonify({
