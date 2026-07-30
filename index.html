@@ -11,6 +11,7 @@
         body { font-family: Arial, sans-serif; background-color: #121212; color: #e0e0e0; text-align: center; margin: 0; padding: 20px; }
         .card { background: #1e1e1e; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-bottom: 20px; width: 90%; max-width: 700px; }
         .price { font-size: 28px; font-weight: bold; color: #4caf50; }
+        .stats { display: flex; justify-content: space-around; background: #252525; padding: 10px; border-radius: 5px; margin: 10px 0; font-size: 14px; }
         .buttons { margin: 15px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
         .time-btns { display: flex; gap: 5px; }
         button { background: #333; color: #fff; border: 1px solid #555; padding: 8px 15px; cursor: pointer; border-radius: 5px; font-weight: bold; }
@@ -29,46 +30,50 @@
         <div>Satış: <span id="satis-fiyat">0.00 TL</span> | Değişim: <span id="degisim">0%</span></div>
         <div style="font-size: 11px; color: #aaa; margin-top: 5px;" id="guncelleme">Son Güncelleme: --:--:--</div>
 
+        <div class="stats">
+            <div>En Düşük: <span id="min-fiyat" style="color:#f44336; font-weight:bold;">0.00 TL</span></div>
+            <div>En Yüksek: <span id="max-fiyat" style="color:#4caf50; font-weight:bold;">0.00 TL</span></div>
+        </div>
+
         <div class="buttons">
             <div class="time-btns">
                 <button class="active" onclick="changeTimeframe('1S', this)">1 Saat</button>
                 <button onclick="changeTimeframe('1G', this)">1 Gün</button>
                 <button onclick="changeTimeframe('1H', this)">1 Hafta</button>
             </div>
-            <button class="btn-reset" onclick="resetZoom()">Sıfırla / Zoom Kapat</button>
+            <button class="btn-reset" onclick="resetZoom()">Zoom Sıfırla</button>
         </div>
 
         <canvas id="goldChart" width="400" height="220"></canvas>
-        <div class="hint">İpucu: Grafikte fare tekerleğiyle yakınlaşabilir, tıklayıp sürükleyerek geçmişte gezinebilirsin.</div>
+        <div class="hint">İpucu: Fare tekerleğiyle yakınlaşabilir, sürükleyerek geçmiş hareketleri inceleyebilirsin.</div>
     </div>
 
     <script>
         let currentTimeframe = '1S';
         let chart;
 
-        // LocalStorage'dan güvenli veri okuma (bozulma/patlamalara karşı korumalı)
+        // LocalStorage'dan güvenli veri çekme
         function getStoredHistory() {
             try {
-                let data = localStorage.getItem('gold_history_v3');
+                let data = localStorage.getItem('gold_history_v4');
                 if (!data) return { '1S': [], '1G': [], '1H': [] };
                 let parsed = JSON.parse(data);
-                // Eğer veri eski formatta veya hatalıysa sıfırla
-                if (typeof parsed !== 'object' || !parsed['1S']) {
+                if (!parsed['1S'] || !parsed['1G'] || !parsed['1H']) {
                     return { '1S': [], '1G': [], '1H': [] };
                 }
                 return parsed;
             } catch (e) {
-                console.error("LocalStorage okuma hatası, sıfırlanıyor:", e);
+                console.error("Veri okuma hatası:", e);
                 return { '1S': [], '1G': [], '1H': [] };
             }
         }
 
-        // Güvenli kayıt
+        // LocalStorage'a güvenli kayıt
         function saveStoredHistory(history) {
             try {
-                localStorage.setItem('gold_history_v3', JSON.stringify(history));
+                localStorage.setItem('gold_history_v4', JSON.stringify(history));
             } catch (e) {
-                console.error("LocalStorage kayıt hatası:", e);
+                console.error("Kayıt hatası:", e);
             }
         }
 
@@ -97,15 +102,8 @@
                 plugins: {
                     legend: { display: false },
                     zoom: {
-                        zoom: {
-                            wheel: { enabled: true },
-                            pinch: { enabled: true },
-                            mode: 'xy',
-                        },
-                        pan: {
-                            enabled: true,
-                            mode: 'xy',
-                        }
+                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' },
+                        pan: { enabled: true, mode: 'xy' }
                     }
                 }
             }
@@ -117,7 +115,19 @@
             
             chart.data.labels = records.map(item => item.time);
             chart.data.datasets[0].data = records.map(item => item.price);
-            chart.update('none');
+            chart.update();
+
+            // En düşük ve en yüksek fiyatları hesapla
+            if (records.length > 0) {
+                let prices = records.map(r => r.price);
+                let min = Math.min(...prices);
+                let max = Math.max(...prices);
+                document.getElementById('min-fiyat').innerText = min.toFixed(2) + " TL";
+                document.getElementById('max-fiyat').innerText = max.toFixed(2) + " TL";
+            } else {
+                document.getElementById('min-fiyat').innerText = "0.00 TL";
+                document.getElementById('max-fiyat').innerText = "0.00 TL";
+            }
         }
 
         function changeTimeframe(tf, btn) {
@@ -144,18 +154,21 @@
                         document.getElementById('guncelleme').innerText = "Son Güncelleme: " + result.data.guncelleme;
 
                         let currentPrice = parseFloat(result.data.alis);
-                        let currentTimeStr = result.data.guncelleme;
-                        
                         if (isNaN(currentPrice)) return;
+
+                        // Tarayıcının o anki saatini al (garanti yöntem)
+                        let now = new Date();
+                        let timeStr = now.toTimeString().split(' ')[0];
 
                         let history = getStoredHistory();
                         let records = history[currentTimeframe] || [];
                         let lastRecord = records[records.length - 1];
 
-                        // Eğer yeni fiyat geldiyse veya listede hiç yoksa ekle
+                        // Eğer son kaydedilen fiyat ile güncel fiyat farklıysa veya hiç kayıt yoksa ekle
                         if (!lastRecord || lastRecord.price !== currentPrice) {
-                            records.push({ time: currentTimeStr, price: currentPrice });
+                            records.push({ time: timeStr, price: currentPrice });
                             
+                            // Limitler (1S için son 120 veri, 1G için 500, 1H için 2000)
                             let limits = { '1S': 120, '1G': 500, '1H': 2000 };
                             let limit = limits[currentTimeframe] || 200;
                             
@@ -172,12 +185,15 @@
                 .catch(err => console.error("Veri çekme hatası:", err));
         }
 
-        // Sayfa açılır açılmaz hafızadaki verileri grafiğe bas ve veriyi çek
+        // Sayfa açıldığında hafızadaki verileri hemen yükle
         updateChartData();
+        
+        // Ardından API'den güncel veriyi çek
         fetchData();
         
-        // Her 10 saniyede bir güncelle
+        // Her 10 saniyede bir yeni veriyi kontrol et ve ekle
         setInterval(fetchData, 10000);
     </script>
 </body>
 </html>
+
