@@ -2,228 +2,128 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gram Altın (GAU/TRY) Canlı Takip</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gram Altın Takip Paneli</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background-color: #0d1117; color: #c9d1d9; display: flex; flex-direction: column; align-items: center; padding: 10px; min-height: 100vh; width: 100vw; overflow-x: hidden; }
-        .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; }
-        
-        .card { background-color: #161b22; border: 1px solid #30363d; border-radius: 14px; padding: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); width: 100%; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        h1 { font-size: 16px; color: #f0b429; font-weight: 600; }
-        .badge { background-color: #238636; color: white; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
-        
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-        .box { background-color: #21262d; border: 1px solid #30363d; border-radius: 10px; padding: 10px; text-align: center; transition: background 0.3s; }
-        .box span { display: block; font-size: 11px; color: #8b949e; margin-bottom: 3px; }
-        .box strong { font-size: 18px; color: #ffffff; letter-spacing: 0.5px; }
-        
-        .footer { display: flex; justify-content: space-between; font-size: 11px; color: #8b949e; border-top: 1px solid #30363d; padding-top: 8px; }
-        
-        .chart-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 14px; overflow: hidden; padding: 14px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.4); display: flex; flex-direction: column; }
-        .chart-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #8b949e; margin-bottom: 8px; }
-        .chart-header strong { color: #f0b429; font-size: 14px; }
-        
-        .timeframes { display: flex; gap: 6px; margin-bottom: 10px; background: #21262d; padding: 4px; border-radius: 8px; border: 1px solid #30363d; }
-        .tf-btn { flex: 1; background: transparent; border: none; color: #8b949e; font-size: 11px; font-weight: 600; padding: 5px 0; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center; }
-        .tf-btn.active { background: #30363d; color: #f0b429; }
-
-        .chart-wrapper { position: relative; width: 100%; height: 210px; }
-        canvas { width: 100%; height: 100%; display: block; }
+        body { font-family: Arial, sans-serif; background-color: #121212; color: #e0e0e0; text-align: center; margin: 0; padding: 20px; }
+        .card { background: #1e1e1e; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-bottom: 20px; width: 90%; max-width: 600px; }
+        .price { font-size: 28px; font-weight: bold; color: #4caf50; }
+        .buttons { margin: 15px 0; }
+        button { background: #333; color: #fff; border: 1px solid #555; padding: 10px 20px; cursor: pointer; border-radius: 5px; margin: 0 5px; font-weight: bold; }
+        button.active { background: #4caf50; border-color: #4caf50; }
+        canvas { background: #181818; border-radius: 5px; padding: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <!-- Fiyat Kartı -->
-        <div class="card">
-            <div class="header">
-                <h1>Gram Altın (GAU/TRY)</h1>
-                <span class="badge" id="status-badge">Canlı</span>
-            </div>
-            
-            <div class="grid">
-                <div class="box" id="box-alis">
-                    <span>Alış</span>
-                    <strong id="alis">Yükleniyor...</strong>
-                </div>
-                <div class="box" id="box-satis">
-                    <span>Satış</span>
-                    <strong id="satis">Yükleniyor...</strong>
-                </div>
-            </div>
+    <div class="card">
+        <h2>Gram Gold (GAU/TRY) Takip</h2>
+        <div id="source" style="font-size: 12px; color: #888;">Kaynak: Bekleniyor...</div>
+        <div class="price" id="alis-fiyat">0.00 TL</div>
+        <div>Satış: <span id="satis-fiyat">0.00 TL</span> | Değişim: <span id="degisim">0%</span></div>
+        <div style="font-size: 11px; color: #aaa; margin-top: 5px;" id="guncelleme">Son Güncelleme: --:--:--</div>
 
-            <div class="footer">
-                <span id="degisim">Değişim: %--</span>
-                <span id="zaman">Güncelleniyor...</span>
-            </div>
+        <div class="buttons">
+            <button class="active" onclick="changeTimeframe('1S', this)">1 Saat</button>
+            <button onclick="changeTimeframe('1G', this)">1 Gün</button>
+            <button onclick="changeTimeframe('1H', this)">1 Hafta</button>
         </div>
 
-        <!-- Grafik Kartı -->
-        <div class="chart-card">
-            <div class="chart-header">
-                <span>Canlı Piyasa Grafiği</span>
-                <strong id="chart-current-price">-- ₺</strong>
-            </div>
-
-            <div class="timeframes">
-                <button class="tf-btn active" onclick="changeTimeframe('1S', this)">1 Saat</button>
-                <button class="tf-btn" onclick="changeTimeframe('1G', this)">1 Gün</button>
-                <button class="tf-btn" onclick="changeTimeframe('1H', this)">1 Hafta</button>
-            </div>
-
-            <div class="chart-wrapper">
-                <canvas id="goldChart"></canvas>
-            </div>
-
-            <div style="display: flex; justify-content: space-between; font-size: 10px; color: #8b949e; margin-top: 6px;">
-                <span id="min-max-info">Min: -- | Max: --</span>
-                <span style="color: #238636; font-weight: 600;">● Sunucu Hafızası Aktif</span>
-            </div>
-        </div>
+        <canvas id="goldChart" width="400" height="200"></canvas>
     </div>
 
     <script>
-        let lastAlis = 0;
         let currentTimeframe = '1S';
-        let historyData = { '1S': [], '1G': [], '1H': [] };
+        let chart;
 
-        const canvas = document.getElementById('goldChart');
-        const ctx = canvas.getContext('2d');
-
-        function resizeCanvas() {
-            canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
-            canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-            drawChart();
+        // LocalStorage'dan geçmiş verileri al veya boş başlat
+        function getStoredHistory() {
+            let data = localStorage.getItem('gold_history');
+            return data ? JSON.parse(data) : { '1S': [], '1G': [], '1H': [] };
         }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+
+        // Geçmiş verileri LocalStorage'a kaydet
+        function saveStoredHistory(history) {
+            localStorage.setItem('gold_history', JSON.stringify(history));
+        }
+
+        const ctx = document.getElementById('goldChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Gram Altın (TL)',
+                    data: [],
+                    borderColor: '#4caf50',
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { ticks: { color: '#aaa' }, grid: { color: '#222' } },
+                    y: { ticks: { color: '#aaa' }, grid: { color: '#222' } }
+                }
+            }
+        });
+
+        function updateChartData() {
+            let history = getStoredHistory();
+            let prices = history[currentTimeframe] || [];
+            
+            chart.data.labels = prices.map((_, index) => index + 1);
+            chart.data.datasets[0].data = prices;
+            chart.update();
+        }
 
         function changeTimeframe(tf, btn) {
             currentTimeframe = tf;
-            document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.buttons button').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            drawChart();
+            updateChartData();
         }
 
-        function drawChart() {
-            let width = canvas.parentElement.clientWidth;
-            let height = canvas.parentElement.clientHeight;
-            let priceHistory = historyData[currentTimeframe];
-            
-            ctx.clearRect(0, 0, width, height);
-            if (!priceHistory || priceHistory.length < 2) return;
+        function fetchData() {
+            fetch('/api/gold')
+                .then(response => response.json())
+                .then(result => {
+                    if(result.success) {
+                        document.getElementById('source').innerText = "Kaynak: " + result.source;
+                        document.getElementById('alis-fiyat').innerText = result.data.alis + " TL";
+                        document.getElementById('satis-fiyat').innerText = result.data.satis + " TL";
+                        document.getElementById('degisim').innerText = result.data.degisim;
+                        document.getElementById('guncelleme').innerText = "Son Güncelleme: " + result.data.guncelleme;
 
-            let min = Math.min(...priceHistory);
-            let max = Math.max(...priceHistory);
-            if (min === max) { min -= 2; max += 2; }
-            
-            document.getElementById('min-max-info').innerText = `Min: ${min.toFixed(2)} ₺ | Max: ${max.toFixed(2)} ₺`;
+                        let currentPrice = parseFloat(result.data.alis);
+                        let history = getStoredHistory();
 
-            let paddingTop = 15;
-            let paddingBottom = 15;
-            let chartHeight = height - paddingTop - paddingBottom;
-            let step = width / (priceHistory.length - 1);
+                        // Seçili zaman dilimleri için son fiyatı ekle (aynı değilse)
+                        ['1S', '1G', '1H'].forEach(tf => {
+                            if (!history[tf]) history[tf] = [];
+                            let lastPrice = history[tf][history[tf].length - 1];
+                            
+                            if (lastPrice !== currentPrice) {
+                                history[tf].push(currentPrice);
+                                // Maksimum kayıt sınırları (örneğin her zaman dilimi için son 50 veri)
+                                if (history[tf].length > 50) history[tf].shift();
+                            }
+                        });
 
-            // Grid Çizgileri
-            ctx.strokeStyle = 'rgba(48, 54, 61, 0.4)';
-            ctx.lineWidth = 1;
-            let gridLines = 4;
-            for (let i = 0; i <= gridLines; i++) {
-                let y = paddingTop + (chartHeight / gridLines) * i;
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(width, y);
-                ctx.stroke();
-
-                let val = max - (i / gridLines) * (max - min);
-                ctx.fillStyle = '#8b949e';
-                ctx.font = '9px sans-serif';
-                ctx.textAlign = 'right';
-                ctx.fillText(val.toFixed(1) + ' ₺', width - 4, y - 3);
-            }
-
-            let points = [];
-            for (let i = 0; i < priceHistory.length; i++) {
-                let x = i * step;
-                let y = paddingTop + chartHeight - ((priceHistory[i] - min) / (max - min)) * chartHeight;
-                points.push({x, y});
-            }
-
-            // Keskin Hatlar
-            ctx.beginPath();
-            ctx.strokeStyle = '#f0b429';
-            ctx.lineWidth = 2;
-
-            for (let i = 0; i < points.length; i++) {
-                if (i === 0) ctx.moveTo(points[i].x, points[i].y);
-                else ctx.lineTo(points[i].x, points[i].y);
-            }
-            ctx.stroke();
-
-            // Gradyan Dolgu
-            ctx.lineTo(points[points.length - 1].x, height);
-            ctx.lineTo(points[0].x, height);
-            ctx.closePath();
-            
-            let gradient = ctx.createLinearGradient(0, paddingTop, 0, height);
-            gradient.addColorStop(0, 'rgba(240, 180, 41, 0.25)');
-            gradient.addColorStop(1, 'rgba(240, 180, 41, 0.0)');
-            ctx.fillStyle = gradient;
-            ctx.fill();
-
-            // Son Nokta İşaretçisi
-            let lastPoint = points[points.length - 1];
-            ctx.beginPath();
-            ctx.arc(lastPoint.x, lastPoint.y, 4.5, 0, Math.PI * 2);
-            ctx.fillStyle = '#f0b429';
-            ctx.fill();
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-        }
-
-        async function fetchGoldData() {
-            try {
-                let response = await fetch('/api/gold');
-                let result = await response.json();
-                
-                if (result.success && result.data) {
-                    let d = result.data;
-                    let alisNum = parseFloat(d.alis);
-                    
-                    document.getElementById('alis').innerText = d.alis + ' ₺';
-                    document.getElementById('satis').innerText = d.satis + ' ₺';
-                    document.getElementById('degisim').innerText = 'Değişim: ' + (d.degisim.startsWith('%') ? d.degisim : '%' + d.degisim);
-                    document.getElementById('zaman').innerText = d.guncelleme || 'Canlı Akış';
-                    document.getElementById('chart-current-price').innerText = d.alis + ' ₺';
-
-                    let badge = document.getElementById('status-badge');
-                    badge.innerText = result.source || 'Canlı';
-
-                    let boxAlis = document.getElementById('box-alis');
-                    if (lastAlis > 0 && alisNum !== lastAlis) {
-                        boxAlis.style.backgroundColor = alisNum > lastAlis ? '#1b4725' : '#471b1b';
-                        setTimeout(() => { boxAlis.style.backgroundColor = '#21262d'; }, 500);
+                        saveStoredHistory(history);
+                        updateChartData();
                     }
-                    lastAlis = alisNum;
-
-                    // Sunucudan gelen kalıcı geçmişi al
-                    if (result.history) {
-                        historyData = result.history;
-                    }
-
-                    drawChart();
-                }
-            } catch (err) {
-                console.error("Hata:", err);
-            }
+                })
+                .catch(err => console.error("Veri çekme hatası:", err));
         }
 
-        fetchGoldData();
-        setInterval(fetchGoldData, 1500);
+        // Sayfa açıldığında ve her 10 saniyede bir veriyi güncelle
+        fetchData();
+        setInterval(fetchData, 10000);
+        updateChartData();
     </script>
 </body>
 </html>
