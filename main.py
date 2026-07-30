@@ -1,234 +1,161 @@
-from flask import Flask, jsonify
-import requests
+import os
+import json
 from datetime import datetime
+import aiohttp
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+import traceback
 
-app = Flask(__name__)
+app = FastAPI()
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dünya Katılım - Canlı Gram Altın Takip</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #121212; color: #e0e0e0; text-align: center; margin: 0; padding: 20px; }
-        .card { background: #1e1e1e; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-bottom: 20px; width: 90%; max-width: 700px; }
-        .price { font-size: 28px; font-weight: bold; color: #4caf50; }
-        .stats { display: flex; justify-content: space-around; background: #252525; padding: 10px; border-radius: 5px; margin: 10px 0; font-size: 14px; }
-        .buttons { margin: 15px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-        .time-btns { display: flex; gap: 5px; }
-        button { background: #333; color: #fff; border: 1px solid #555; padding: 8px 15px; cursor: pointer; border-radius: 5px; font-weight: bold; }
-        button.active { background: #4caf50; border-color: #4caf50; }
-        .btn-reset { background: #d32f2f; border-color: #f44336; font-size: 12px; padding: 8px 12px; }
-        canvas { background: #181818; border-radius: 5px; padding: 10px; }
-        .hint { font-size: 11px; color: #777; margin-top: 8px; }
-        .error-msg { color: #f44336; font-size: 12px; margin-top: 5px; display: none; }
-    </style>
-</head>
-<body>
+# CORS – tüm originlere izin
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    <div class="card">
-        <h2>Dünya Katılım - Gram Altın Takip</h2>
-        <div id="source" style="font-size: 12px; color: #888;">Kaynak: Canlı Piyasa Verisi</div>
-        <div class="price" id="alis-fiyat">Bağlanıyor...</div>
-        <div>Satış: <span id="satis-fiyat">--</span> | Değişim: <span id="degisim">-%</span></div>
-        <div style="font-size: 11px; color: #aaa; margin-top: 5px;" id="guncelleme">Son Güncelleme: --:--:--</div>
-        <div id="error-alert" class="error-msg">Canlı veri alınamadı, sunucu yanıtı bekleniyor...</div>
+# ---------- Veri Havuzu ----------
+veri_havuzu = []                # {"zaman": ISO, "fiyat": float}
+MAX_VERI = 500
+son_bilinen_fiyat = None
+son_bilinen_degisim = 0.0
 
-        <div class="stats">
-            <div>En Düşük: <span id="min-fiyat" style="color:#f44336; font-weight:bold;">-- TL</span></div>
-            <div>En Yüksek: <span id="max-fiyat" style="color:#4caf50; font-weight:bold;">-- TL</span></div>
-        </div>
-
-        <div class="buttons">
-            <div class="time-btns">
-                <button class="active" onclick="changeTimeframe('1S', this)">1 Saat</button>
-                <button onclick="changeTimeframe('1G', this)">1 Gün</button>
-                <button onclick="changeTimeframe('1H', this)">1 Hafta</button>
-            </div>
-            <button class="btn-reset" onclick="resetZoom()">Zoom Sıfırla</button>
-        </div>
-
-        <canvas id="goldChart" width="400" height="220"></canvas>
-        <div class="hint">Gerçek Zamanlı Piyasa Takip Paneli</div>
-    </div>
-
-    <script>
-        let currentTimeframe = '1S';
-        let chart;
-        const STORAGE_KEY = 'dunya_katilim_real_v2';
-
-        function getStoredHistory() {
-            try {
-                let data = localStorage.getItem(STORAGE_KEY);
-                if (!data) return { '1S': [], '1G': [], '1H': [] };
-                return JSON.parse(data);
-            } catch (e) {
-                return { '1S': [], '1G': [], '1H': [] };
-            }
-        }
-
-        function saveStoredHistory(history) {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-            } catch (e) {
-                console.error("Kayıt hatası:", e);
-            }
-        }
-
-        const ctx = document.getElementById('goldChart').getContext('2d');
-        chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Gram Altın (TL)',
-                    data: [],
-                    borderColor: '#4caf50',
-                    borderWidth: 2,
-                    pointRadius: 2,
-                    tension: 0.1,
-                    fill: true,
-                    backgroundColor: 'rgba(76, 175, 80, 0.05)'
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    x: { ticks: { color: '#aaa', maxTicksLimit: 8 }, grid: { color: '#222' } },
-                    y: { ticks: { color: '#aaa' }, grid: { color: '#222' } }
-                },
-                plugins: {
-                    legend: { display: false },
-                    zoom: {
-                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' },
-                        pan: { enabled: true, mode: 'xy' }
-                    }
-                }
-            }
-        });
-
-        function updateChartData() {
-            let history = getStoredHistory();
-            let records = history[currentTimeframe] || [];
-            
-            chart.data.labels = records.map(item => item.time);
-            chart.data.datasets[0].data = records.map(item => item.price);
-            chart.update();
-
-            if (records.length > 0) {
-                let prices = records.map(r => r.price);
-                let min = Math.min(...prices);
-                let max = Math.max(...prices);
-                document.getElementById('min-fiyat').innerText = min.toFixed(2) + " TL";
-                document.getElementById('max-fiyat').innerText = max.toFixed(2) + " TL";
-            }
-        }
-
-        function changeTimeframe(tf, btn) {
-            currentTimeframe = tf;
-            document.querySelectorAll('.time-btns button').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            updateChartData();
-            chart.resetZoom();
-        }
-
-        function resetZoom() {
-            chart.resetZoom();
-        }
-
-        function fetchData() {
-            fetch('/api/gold')
-                .then(response => response.json())
-                .then(result => {
-                    if(result && result.success) {
-                        document.getElementById('error-alert').style.display = 'none';
-                        document.getElementById('source').innerText = "Kaynak: " + result.source;
-                        document.getElementById('alis-fiyat').innerText = result.alis + " TL";
-                        document.getElementById('satis-fiyat').innerText = result.satis + " TL";
-                        document.getElementById('degisim').innerText = result.degisim;
-                        document.getElementById('guncelleme').innerText = "Son Güncelleme: " + result.guncelleme;
-
-                        let currentPrice = parseFloat(result.alis.replace('.', '').replace(',', '.'));
-                        if (isNaN(currentPrice)) return;
-
-                        let now = new Date();
-                        let timeStr = now.toTimeString().split(' ')[0];
-
-                        let history = getStoredHistory();
-                        let records = history[currentTimeframe] || [];
-                        
-                        let lastRecord = records[records.length - 1];
-                        // Sadece fiyat değiştiğinde veya yeni kayıt eklenecekse grafiğe işle
-                        if (!lastRecord || lastRecord.price !== currentPrice || records.length === 0) {
-                            records.push({ time: timeStr, price: currentPrice });
-                            let limits = { '1S': 120, '1G': 500, '1H': 2000 };
-                            let limit = limits[currentTimeframe] || 200;
-                            if (records.length > limit) records.shift();
-                            
-                            history[currentTimeframe] = records;
-                            saveStoredHistory(history);
-                            updateChartData();
-                        }
-                    } else {
-                        document.getElementById('error-alert').style.display = 'block';
-                    }
-                })
-                .catch(err => {
-                    console.error("Bağlantı hatası:", err);
-                    document.getElementById('error-alert').style.display = 'block';
-                });
-        }
-
-        updateChartData();
-        fetchData();
-        setInterval(fetchData, 10000);
-    </script>
-</body>
-</html>
-"""
-
-@app.route('/')
-def index():
-    return HTML_TEMPLATE
-
-@app.route('/api/gold')
-def get_gold_price():
+# ---------- ENDPOINTLER ----------
+@app.get("/")
+async def root():
+    # index.html dosyasını oku ve döndür
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-        
-        # Canlı ve güncel finans verisi sağlayan ana uç nokta
-        response = requests.get("https://api.genelpara.com/embed/altin.json", headers=headers, timeout=6)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'GA' in data:
-                alis = data['GA']['alis']
-                satis = data['GA']['satis']
-                degisim = f"%{data['GA']['degisim']}"
-                simdi = datetime.now().strftime("%H:%M:%S")
-                
-                return jsonify({
-                    "success": True,
-                    "source": "Canlı Piyasa Akışı",
-                    "alis": str(alis),
-                    "satis": str(satis),
-                    "degisim": degisim,
-                    "guncelleme": simdi
+        with open("index.html", "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>index.html bulunamadı</h1>", status_code=404)
+
+@app.get("/api/altin")
+async def altin():
+    global son_bilinen_fiyat, son_bilinen_degisim, veri_havuzu
+    try:
+        fiyat, degisim = await get_altin_fiyati()
+        if fiyat is None:
+            if son_bilinen_fiyat is not None:
+                fiyat = son_bilinen_fiyat
+                degisim = son_bilinen_degisim
+            else:
+                return JSONResponse({
+                    "fiyat": None,
+                    "degisim": 0.0,
+                    "guncelleme": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "hata": "Veri alınamadı"
                 })
-        
-        raise Exception("API veri döndürmedi")
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
+        # Havuza ekle
+        now = datetime.now().isoformat()
+        veri_havuzu.append({"zaman": now, "fiyat": fiyat})
+        if len(veri_havuzu) > MAX_VERI:
+            veri_havuzu.pop(0)
+        son_bilinen_fiyat = fiyat
+        son_bilinen_degisim = degisim
+        return JSONResponse({
+            "fiyat": fiyat,
+            "degisim": degisim,
+            "guncelleme": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         })
+    except Exception as e:
+        print(f"Altın endpoint hatası: {e}")
+        traceback.print_exc()
+        if son_bilinen_fiyat is not None:
+            return JSONResponse({
+                "fiyat": son_bilinen_fiyat,
+                "degisim": son_bilinen_degisim,
+                "guncelleme": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "hata": str(e)
+            })
+        else:
+            return JSONResponse({
+                "fiyat": None,
+                "degisim": 0.0,
+                "guncelleme": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "hata": "Veri alınamadı"
+            })
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.get("/api/gecmis")
+async def gecmis():
+    return JSONResponse(veri_havuzu[-500:])
+
+# ---------- ALTIN FİYATI ÇEKME (3 API stratejisi) ----------
+async def get_altin_fiyati():
+    global son_bilinen_fiyat, son_bilinen_degisim
+
+    # 1. Gold-API (birincil)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://www.gold-api.com/api/v1/latest/XAU/TRY", timeout=10) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    print(f"Gold-API yanıtı: {data}")
+                    fiyat = data.get("price") or data.get("rate")
+                    if fiyat is not None:
+                        fiyat = float(fiyat)
+                        degisim = data.get("change_percent") or data.get("change") or 0.0
+                        if isinstance(degisim, str):
+                            degisim = float(degisim)
+                        return fiyat, degisim
+    except Exception as e:
+        print(f"Gold-API hatası: {e}")
+
+    # 2. ExchangeRate-API (ikincil) – XAU/USD ve USD/TRY alıp grama çevir
+    try:
+        async with aiohttp.ClientSession() as session:
+            # XAU/USD (ons fiyatı)
+            async with session.get("https://api.exchangerate-api.com/v4/latest/XAU", timeout=10) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    usd_rate = data.get("rates", {}).get("USD")
+                    if usd_rate is None:
+                        raise Exception("XAU/USD alınamadı")
+                    # USD/TRY
+                    async with session.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=10) as resp2:
+                        if resp2.status == 200:
+                            data2 = await resp2.json()
+                            try_rate = data2.get("rates", {}).get("TRY")
+                            if try_rate is None:
+                                raise Exception("USD/TRY alınamadı")
+                            # ons fiyatı * kur = TL/ons, sonra grama çevir (1 ons = 31.1035 g)
+                            fiyat = (usd_rate * try_rate) / 31.1035
+                            degisim = 0.0
+                            return fiyat, degisim
+    except Exception as e:
+        print(f"ExchangeRate-API hatası: {e}")
+
+    # 3. Alpha Vantage (üçüncül)
+    try:
+        url = "https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=TRY&apikey=demo"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    print(f"Alpha Vantage yanıtı: {data}")
+                    rate = data.get("Realtime Currency Exchange Rate", {}).get("5. Exchange Rate")
+                    if rate is not None:
+                        fiyat = float(rate)
+                        degisim = 0.0
+                        return fiyat, degisim
+    except Exception as e:
+        print(f"Alpha Vantage hatası: {e}")
+
+    # Hepsi başarısız – son bilineni döndür
+    if son_bilinen_fiyat is not None:
+        print("Tüm API'ler başarısız, son bilinen fiyat döndürülüyor.")
+        return son_bilinen_fiyat, son_bilinen_degisim
+    else:
+        print("Tüm API'ler başarısız ve hiç veri yok.")
+        return None, 0.0
+
+# Render için port
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
