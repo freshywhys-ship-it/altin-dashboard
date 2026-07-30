@@ -21,10 +21,12 @@
         
         .footer { display: flex; justify-content: space-between; font-size: 11px; color: #8b949e; border-top: 1px solid #30363d; padding-top: 8px; }
         
-        .chart-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 14px; overflow: hidden; padding: 14px; height: 340px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.4); display: flex; flex-direction: column; justify-content: space-between; }
+        .chart-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 14px; overflow: hidden; padding: 14px; height: 350px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.4); display: flex; flex-direction: column; justify-content: space-between; }
         .chart-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #8b949e; margin-bottom: 8px; }
         .chart-header strong { color: #f0b429; font-size: 14px; }
-        canvas { width: 100%; height: 230px; display: block; }
+        
+        .chart-wrapper { position: relative; width: 100%; height: 230px; }
+        canvas { width: 100%; height: 100%; display: block; }
     </style>
 </head>
 <body>
@@ -54,16 +56,18 @@
             </div>
         </div>
 
-        <!-- Canlı Grafik -->
+        <!-- Detaylı Canlı Grafik -->
         <div class="chart-card">
             <div class="chart-header">
-                <span>Canlı Fiyat Grafiği</span>
+                <span>Detaylı Canlı Akış</span>
                 <strong id="chart-current-price">-- ₺</strong>
             </div>
-            <canvas id="goldChart"></canvas>
+            <div class="chart-wrapper">
+                <canvas id="goldChart"></canvas>
+            </div>
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #8b949e; margin-top: 6px;">
-                <span>Anlık Akış</span>
-                <span style="color: #238636; font-weight: 600;">● Kesintisiz Senkronize</span>
+                <span id="min-max-info">Min: -- | Max: --</span>
+                <span style="color: #238636; font-weight: 600;">● HD Izgaralı Akış</span>
             </div>
         </div>
     </div>
@@ -76,53 +80,94 @@
         const ctx = canvas.getContext('2d');
 
         function resizeCanvas() {
-            canvas.width = canvas.parentElement.clientWidth - 28;
-            canvas.height = 220;
+            canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
+            canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
         function drawChart() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let width = canvas.parentElement.clientWidth;
+            let height = canvas.parentElement.clientHeight;
+            
+            ctx.clearRect(0, 0, width, height);
             if (priceHistory.length < 2) return;
 
             let min = Math.min(...priceHistory);
             let max = Math.max(...priceHistory);
             if (min === max) { min -= 2; max += 2; }
+            
+            // Altbilgiye min-max yazdır
+            document.getElementById('min-max-info').innerText = `Min: ${min.toFixed(2)} ₺ | Max: ${max.toFixed(2)} ₺`;
 
-            let padding = 25;
-            let w = canvas.width;
-            let h = canvas.height;
-            let step = w / (priceHistory.length - 1);
+            let paddingTop = 15;
+            let paddingBottom = 15;
+            let chartHeight = height - paddingTop - paddingBottom;
+            let step = width / (priceHistory.length - 1);
 
-            ctx.beginPath();
-            ctx.strokeStyle = '#f0b429';
-            ctx.lineWidth = 2.5;
+            // Arka plan ızgara çizgileri (Grid)
+            ctx.strokeStyle = 'rgba(48, 54, 61, 0.4)';
+            ctx.lineWidth = 1;
+            let gridLines = 4;
+            for (let i = 0; i <= gridLines; i++) {
+                let y = paddingTop + (chartHeight / gridLines) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+
+                // Fiyat etiketleri (sağ kenar)
+                let val = max - (i / gridLines) * (max - min);
+                ctx.fillStyle = '#8b949e';
+                ctx.font = '9px sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText(val.toFixed(1) + ' ₺', width - 4, y - 3);
+            }
 
             let points = [];
             for (let i = 0; i < priceHistory.length; i++) {
                 let x = i * step;
-                let y = h - padding - ((priceHistory[i] - min) / (max - min)) * (h - padding * 2);
+                let y = paddingTop + chartHeight - ((priceHistory[i] - min) / (max - min)) * chartHeight;
                 points.push({x, y});
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
+            }
+
+            // Kavisli (Smooth) Çizgi Çizimi
+            ctx.beginPath();
+            ctx.strokeStyle = '#f0b429';
+            ctx.lineWidth = 2.5;
+
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 0; i < points.length - 1; i++) {
+                let xc = (points[i].x + points[i + 1].x) / 2;
+                let yc = (points[i].y + points[i + 1].y) / 2;
+                ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+            }
+            if(points.length > 1) {
+                ctx.quadraticCurveTo(
+                    points[points.length - 2].x, 
+                    points[points.length - 2].y, 
+                    points[points.length - 1].x, 
+                    points[points.length - 1].y
+                );
             }
             ctx.stroke();
 
-            let lastX = points[points.length - 1].x;
-            ctx.lineTo(lastX, h);
-            ctx.lineTo(0, h);
+            // Gradyan Alan Dolgusu
+            ctx.lineTo(points[points.length - 1].x, height);
+            ctx.lineTo(points[0].x, height);
             ctx.closePath();
             
-            let gradient = ctx.createLinearGradient(0, 0, 0, h);
-            gradient.addColorStop(0, 'rgba(240, 180, 41, 0.3)');
+            let gradient = ctx.createLinearGradient(0, paddingTop, 0, height);
+            gradient.addColorStop(0, 'rgba(240, 180, 41, 0.25)');
             gradient.addColorStop(1, 'rgba(240, 180, 41, 0.0)');
             ctx.fillStyle = gradient;
             ctx.fill();
 
+            // Son noktaya parlayan pulse daire
             let lastPoint = points[points.length - 1];
             ctx.beginPath();
-            ctx.arc(lastPoint.x, lastPoint.y, 4.5, 0, Math.PI * 2);
+            ctx.arc(lastPoint.x, lastPoint.y, 5, 0, Math.PI * 2);
             ctx.fillStyle = '#f0b429';
             ctx.fill();
             ctx.strokeStyle = '#ffffff';
@@ -156,11 +201,11 @@
                     lastAlis = alisNum;
 
                     if (priceHistory.length === 0) {
-                        priceHistory = [alisNum - 1, alisNum - 0.5, alisNum - 0.8, alisNum];
+                        priceHistory = [alisNum - 1.5, alisNum - 0.8, alisNum - 1.2, alisNum];
                     } else {
                         if (priceHistory[priceHistory.length - 1] !== alisNum) {
                             priceHistory.push(alisNum);
-                            if (priceHistory.length > 25) priceHistory.shift();
+                            if (priceHistory.length > 30) priceHistory.shift();
                         }
                     }
                     drawChart();
