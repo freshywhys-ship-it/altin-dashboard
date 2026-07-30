@@ -1,6 +1,5 @@
 from flask import Flask, jsonify
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 
 app = Flask(__name__)
@@ -11,7 +10,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dünya Katılım - Gerçek Zamanlı Altın Takip</title>
+    <title>Dünya Katılım - Canlı Gram Altın Takip</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
     <style>
@@ -26,20 +25,22 @@ HTML_TEMPLATE = """
         .btn-reset { background: #d32f2f; border-color: #f44336; font-size: 12px; padding: 8px 12px; }
         canvas { background: #181818; border-radius: 5px; padding: 10px; }
         .hint { font-size: 11px; color: #777; margin-top: 8px; }
+        .error-msg { color: #f44336; font-size: 12px; margin-top: 5px; display: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
         <h2>Dünya Katılım - Gram Altın Takip</h2>
-        <div id="source" style="font-size: 12px; color: #888;">Kaynak: Bekleniyor...</div>
-        <div class="price" id="alis-fiyat">0.00 TL</div>
-        <div>Satış: <span id="satis-fiyat">0.00 TL</span> | Değişim: <span id="degisim">0%</span></div>
+        <div id="source" style="font-size: 12px; color: #888;">Kaynak: Canlı Piyasa Verisi</div>
+        <div class="price" id="alis-fiyat">Bağlanıyor...</div>
+        <div>Satış: <span id="satis-fiyat">--</span> | Değişim: <span id="degisim">-%</span></div>
         <div style="font-size: 11px; color: #aaa; margin-top: 5px;" id="guncelleme">Son Güncelleme: --:--:--</div>
+        <div id="error-alert" class="error-msg">Canlı veri alınamadı, bağlantı bekleniyor...</div>
 
         <div class="stats">
-            <div>En Düşük: <span id="min-fiyat" style="color:#f44336; font-weight:bold;">0.00 TL</span></div>
-            <div>En Yüksek: <span id="max-fiyat" style="color:#4caf50; font-weight:bold;">0.00 TL</span></div>
+            <div>En Düşük: <span id="min-fiyat" style="color:#f44336; font-weight:bold;">-- TL</span></div>
+            <div>En Yüksek: <span id="max-fiyat" style="color:#4caf50; font-weight:bold;">-- TL</span></div>
         </div>
 
         <div class="buttons">
@@ -52,23 +53,19 @@ HTML_TEMPLATE = """
         </div>
 
         <canvas id="goldChart" width="400" height="220"></canvas>
-        <div class="hint">Gerçek Zamanlı Canlı Takip Paneli</div>
+        <div class="hint">Gerçek Zamanlı Piyasa Takip Ekranı</div>
     </div>
 
     <script>
         let currentTimeframe = '1S';
         let chart;
-        const STORAGE_KEY = 'dunya_katilim_gold_v8';
+        const STORAGE_KEY = 'dunya_katilim_real_gold_v1';
 
         function getStoredHistory() {
             try {
                 let data = localStorage.getItem(STORAGE_KEY);
                 if (!data) return { '1S': [], '1G': [], '1H': [] };
-                let parsed = JSON.parse(data);
-                if (!parsed['1S'] || !parsed['1G'] || !parsed['1H']) {
-                    return { '1S': [], '1G': [], '1H': [] };
-                }
-                return parsed;
+                return JSON.parse(data);
             } catch (e) {
                 return { '1S': [], '1G': [], '1H': [] };
             }
@@ -148,6 +145,7 @@ HTML_TEMPLATE = """
                 .then(response => response.json())
                 .then(result => {
                     if(result && result.success) {
+                        document.getElementById('error-alert').style.display = 'none';
                         document.getElementById('source').innerText = "Kaynak: " + result.source;
                         document.getElementById('alis-fiyat').innerText = result.alis + " TL";
                         document.getElementById('satis-fiyat').innerText = result.satis + " TL";
@@ -164,7 +162,8 @@ HTML_TEMPLATE = """
                         let records = history[currentTimeframe] || [];
                         
                         let lastRecord = records[records.length - 1];
-                        if (!lastRecord || lastRecord.price !== currentPrice) {
+                        // Sadece yeni bir veri noktası geldiğinde veya fiyat değiştiğinde kaydet
+                        if (!lastRecord || lastRecord.price !== currentPrice || records.length === 0) {
                             records.push({ time: timeStr, price: currentPrice });
                             let limits = { '1S': 120, '1G': 500, '1H': 2000 };
                             let limit = limits[currentTimeframe] || 200;
@@ -174,14 +173,19 @@ HTML_TEMPLATE = """
                             saveStoredHistory(history);
                             updateChartData();
                         }
+                    } else {
+                        document.getElementById('error-alert').style.display = 'block';
                     }
                 })
-                .catch(err => console.error("Veri çekme hatası:", err));
+                .catch(err => {
+                    console.error("Veri çekme hatası:", err);
+                    document.getElementById('error-alert').style.display = 'block';
+                });
         }
 
         updateChartData();
         fetchData();
-        setInterval(fetchData, 10000);
+        setInterval(fetchData, 10000); // Her 10 saniyede bir gerçek piyasayı sorgula
     </script>
 </body>
 </html>
@@ -194,66 +198,38 @@ def index():
 @app.route('/api/gold')
 def get_gold_price():
     try:
-        # Dünya Katılım Bankası resmi web sitesinden veri çekme denemesi
-        url = "https://dunyakatilim.com.tr/"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        response = requests.get(url, headers=headers, timeout=6)
+        # Harem Altın veya alternatif canlı finansal kaynakları sorgulama (Gerçek Piyasa API)
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get("https://hasircularaltin.com/api/prices", headers=headers, timeout=5) # veya genelpara/harem endpointleri
         
-        alis_fiyat = None
-        satis_fiyat = None
-
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Sayfa içerisindeki tüm metin bloklarını veya tablo/kur alanlarını tarayalım
-            for element in soup.find_all(['div', 'span', 'td', 'p']):
-                text = element.get_text()
-                if 'XAU' in text or 'ALTIN' in text:
-                    # Yakın çevredeki rakamsal verileri arama mantığı
-                    parent = element.parent
-                    if parent:
-                        parent_text = parent.get_text()
-                        # Örnek yakalama mantığı için metin parçalama
-                        pass
-
-        # Eğer doğrudan HTML parse edilemezse (sitelerin bir kısmı kurları JS ile dışarıdan API ile çeker), 
-        # bankanın finansal servis sağlayıcı bağlantılarını simüle eden veya güncel piyasa altın kurunu 
-        # kesintisiz sunan alternatif finans API'sine yönlendirerek kesintisiz gerçek veri akışı sağlanır:
-        if not alis_fiyat:
-            altin_res = requests.get("https://api.genelpara.com/embed/altin.json", timeout=4)
-            if altin_res.status_code == 200:
-                altin_data = altin_res.json()
-                if 'GA' in altin_data:
-                    alis_fiyat = str(altin_data['GA']['alis'])
-                    satis_fiyat = str(altin_data['GA']['satis'])
-                    degisim = f"%{altin_data['GA']['degisim']}"
-                else:
-                    alis_fiyat = "6240.00"
-                    satis_fiyat = "6250.00"
-                    degisim = "%0.35"
-            else:
-                alis_fiyat = "6240.00"
-                satis_fiyat = "6250.00"
-                degisim = "%0.35"
-        else:
-            degisim = "%0.35"
-
-        simdi = datetime.now().strftime("%H:%M:%S")
-
-        return jsonify({
-            "success": True,
-            "source": "Gerçek Piyasa / Banka Veri Akışı",
-            "alis": alis_fiyat,
-            "satis": satis_fiyat,
-            "degisim": degisim,
-            "guncelleme": simdi
-        })
-    except Exception as e:
-        print("API Hatası:", e)
+        # Daha kararlı çalışan alternatif açık finans veri kaynağı (Kuyumcu/Borsa ortak akış)
+        fallback_res = requests.get("https://api.genelpara.com/embed/altin.json", headers=headers, timeout=5)
+        
+        if fallback_res.status_code == 200:
+            data = fallback_res.json()
+            if 'GA' in data:
+                alis = float(data['GA']['alis'])
+                satis = float(data['GA']['satis'])
+                degisim = f"%{data['GA']['degisim']}"
+                simdi = datetime.now().strftime("%H:%M:%S")
+                
+                return jsonify({
+                    "success": True,
+                    "source": "Canlı Borsa / Kuyumcu Akışı",
+                    "alis": f"{alis:.2f}",
+                    "satis": f"{satis:.2f}",
+                    "degisim": degisim,
+                    "guncelleme": simdi
+                })
+        
+        raise Exception("Canlı piyasa verisine ulaşılamadı")
     
-    return jsonify({"success": False})
+    except Exception as e:
+        # Halka açık sistemlerde yanlış veri basmak yerine hata döndürmek en güvenlisidir.
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
 
 if __name__ == '__main__':
     app.run(debug=True)
