@@ -1,13 +1,21 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # index.html aynı klasördeyse doğrudan okur
+    try:
+        base_dir = os.path.abspath(os.path.dirname(__file__))
+        file_path = os.path.join(base_dir, 'index.html')
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        return f"Arayüz yüklenemedi: {e}"
 
 @app.route('/api/gold')
 def get_gold_price():
@@ -22,7 +30,6 @@ def get_gold_price():
             alis_fiyat = "0.00"
             satis_fiyat = "0.00"
             
-            # Sitedeki XAU verilerini içeren metinleri tarıyoruz
             for el in soup.find_all(['span', 'div', 'p', 'li']):
                 text = el.get_text()
                 if 'XAU' in text and 'Alış' in text:
@@ -33,7 +40,6 @@ def get_gold_price():
                         if 'Satış' in p and i + 1 < len(parts):
                             satis_fiyat = parts[i+1].replace('.', '').replace(',', '.')
 
-            # Yedek baz kur koruması
             if alis_fiyat == "0.00":
                 alis_fiyat = "6202.58"
                 satis_fiyat = "6232.87"
