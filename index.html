@@ -6,65 +6,61 @@
     <title>Gram Altın (GAU/TRY) Canlı Takip</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background-color: #0d1117; color: #c9d1d9; display: flex; flex-direction: column; align-items: center; padding: 20px; min-height: 100vh; }
+        body { background-color: #0d1117; color: #c9d1d9; display: flex; flex-direction: column; align-items: center; padding: 15px; min-height: 100vh; }
         .container { width: 100%; max-width: 600px; }
         .card { background-color: #161b22; border: 1px solid #30363d; border-radius: 16px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); margin-bottom: 20px; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        h1 { font-size: 20px; color: #f0b429; }
-        .badge { background-color: #0070f3; color: white; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        h1 { font-size: 18px; color: #f0b429; }
+        .badge { background-color: #da3633; color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        .badge.active { background-color: #238636; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px; }
         .box { background-color: #21262d; border: 1px solid #30363d; border-radius: 12px; padding: 15px; text-align: center; }
-        .box span { display: block; font-size: 13px; color: #8b949e; margin-bottom: 5px; }
-        .box strong { font-size: 22px; color: #ffffff; }
-        .footer { display: flex; justify-content: space-between; font-size: 12px; color: #8b949e; border-top: 1px solid #30363d; padding-top: 12px; }
-        .tradingview-widget-container { border-radius: 12px; overflow: hidden; border: 1px solid #30363d; background: #161b22; padding: 10px; }
+        .box span { display: block; font-size: 12px; color: #8b949e; margin-bottom: 5px; }
+        .box strong { font-size: 20px; color: #ffffff; }
+        .footer { display: flex; justify-content: space-between; font-size: 11px; color: #8b949e; border-top: 1px solid #30363d; padding-top: 12px; }
+        .tradingview-widget-container { border-radius: 16px; overflow: hidden; border: 1px solid #30363d; background: #161b22; height: 400px; width: 100%; }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <!-- Fiyat Kartı -->
         <div class="card">
             <div class="header">
                 <h1>Gram Altın (GAU/TRY)</h1>
-                <span class="badge" id="status-badge">Canlı</span>
+                <span class="badge" id="status-badge">Bağlanıyor...</span>
             </div>
             
             <div class="grid">
                 <div class="box">
                     <span>Alış</span>
-                    <strong id="alis">Yükleniyor...</strong>
+                    <strong id="alis">--- ₺</strong>
                 </div>
                 <div class="box">
                     <span>Satış</span>
-                    <strong id="satis">Yükleniyor...</strong>
+                    <strong id="satis">--- ₺</strong>
                 </div>
             </div>
 
             <div class="footer">
                 <span id="degisim">Değişim: %--</span>
-                <span id="zaman">Güncelleniyor...</span>
+                <span id="zaman">Yükleniyor...</span>
             </div>
         </div>
 
-        <!-- TradingView Grafik Widget -->
+        <!-- TradingView Mini Chart Widget -->
         <div class="tradingview-widget-container">
-            <div class="tradingview-widget-container__widget" style="height:400px;width:100%"></div>
-            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+            <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>
             {
+              "symbol": "FX_IDC:XAUTRY",
               "width": "100%",
-              "height": "400",
-              "symbol": "FX_IDC:USDTRY",
-              "interval": "D",
-              "timezone": "Europe/Istanbul",
-              "theme": "dark",
-              "style": "1",
+              "height": "100%",
               "locale": "tr",
-              "enable_publishing": false,
-              "hide_top_toolbar": false,
-              "save_image": false,
-              "calendar": false,
-              "support_host": "https://www.tradingview.com"
+              "dateRange": "12M",
+              "colorTheme": "dark",
+              "isTransparent": true,
+              "autosize": true,
+              "largeChartUrl": ""
             }
             </script>
         </div>
@@ -73,28 +69,27 @@
     <script>
         async function fetchGoldData() {
             try {
-                // CORS engeli olmaksızın doğrudan güvenli açık kaynak finans verisi
-                let response = await fetch('https://api.genelpara.com/embed/altin.json');
-                let data = await response.json();
+                let response = await fetch('/api/gold');
+                let result = await response.json();
                 
-                if (data && data.GA) {
-                    document.getElementById('alis').innerText = data.GA.alis + ' ₺';
-                    document.getElementById('satis').innerText = data.GA.satis + ' ₺';
-                    document.getElementById('degisim').innerText = 'Değişim: %' + data.GA.degisim;
-                    document.getElementById('zaman').innerText = data.GA.d_zaman;
-                    document.getElementById('status-badge').style.backgroundColor = '#238636';
-                    document.getElementById('status-badge').innerText = 'Aktif';
+                if (result.success && result.data) {
+                    let d = result.data;
+                    document.getElementById('alis').innerText = d.alis + ' ₺';
+                    document.getElementById('satis').innerText = d.satis + ' ₺';
+                    document.getElementById('degisim').innerText = 'Değişim: %' + d.degisim;
+                    document.getElementById('zaman').innerText = d.guncelleme;
+                    
+                    let badge = document.getElementById('status-badge');
+                    badge.innerText = 'Canlı';
+                    badge.className = 'badge active';
                 }
             } catch (err) {
-                console.error("API Hatası:", err);
-                document.getElementById('status-badge').style.backgroundColor = '#da3633';
-                document.getElementById('status-badge').innerText = 'Hata';
+                console.error("Hata:", err);
             }
         }
 
         fetchGoldData();
-        setInterval(fetchGoldData, 10000); // Her 10 saniyede bir güncelle
+        setInterval(fetchGoldData, 10000);
     </script>
 </body>
 </html>
-
