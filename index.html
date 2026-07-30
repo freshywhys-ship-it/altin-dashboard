@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gram Altın Takip Paneli</title>
-    <!-- Chart.js ve Zoom Eklentisi -->
+    <title>Dünya Katılım - Gram Altın Takip Paneli</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
     <style>
@@ -24,7 +23,7 @@
 <body>
 
     <div class="card">
-        <h2>Gram Gold (GAU/TRY) Takip</h2>
+        <h2>Dünya Katılım - Gram Altın Takip</h2>
         <div id="source" style="font-size: 12px; color: #888;">Kaynak: Bekleniyor...</div>
         <div class="price" id="alis-fiyat">0.00 TL</div>
         <div>Satış: <span id="satis-fiyat">0.00 TL</span> | Değişim: <span id="degisim">0%</span></div>
@@ -51,11 +50,11 @@
     <script>
         let currentTimeframe = '1S';
         let chart;
+        const STORAGE_KEY = 'dunya_katilim_gold_v5';
 
-        // LocalStorage'dan güvenli veri çekme
         function getStoredHistory() {
             try {
-                let data = localStorage.getItem('gold_history_v4');
+                let data = localStorage.getItem(STORAGE_KEY);
                 if (!data) return { '1S': [], '1G': [], '1H': [] };
                 let parsed = JSON.parse(data);
                 if (!parsed['1S'] || !parsed['1G'] || !parsed['1H']) {
@@ -63,15 +62,13 @@
                 }
                 return parsed;
             } catch (e) {
-                console.error("Veri okuma hatası:", e);
                 return { '1S': [], '1G': [], '1H': [] };
             }
         }
 
-        // LocalStorage'a güvenli kayıt
         function saveStoredHistory(history) {
             try {
-                localStorage.setItem('gold_history_v4', JSON.stringify(history));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
             } catch (e) {
                 console.error("Kayıt hatası:", e);
             }
@@ -117,7 +114,6 @@
             chart.data.datasets[0].data = records.map(item => item.price);
             chart.update();
 
-            // En düşük ve en yüksek fiyatları hesapla
             if (records.length > 0) {
                 let prices = records.map(r => r.price);
                 let min = Math.min(...prices);
@@ -156,7 +152,6 @@
                         let currentPrice = parseFloat(result.data.alis);
                         if (isNaN(currentPrice)) return;
 
-                        // Tarayıcının o anki saatini al (garanti yöntem)
                         let now = new Date();
                         let timeStr = now.toTimeString().split(' ')[0];
 
@@ -164,11 +159,10 @@
                         let records = history[currentTimeframe] || [];
                         let lastRecord = records[records.length - 1];
 
-                        // Eğer son kaydedilen fiyat ile güncel fiyat farklıysa veya hiç kayıt yoksa ekle
+                        // Yeni veri ekleme kontrolü
                         if (!lastRecord || lastRecord.price !== currentPrice) {
                             records.push({ time: timeStr, price: currentPrice });
                             
-                            // Limitler (1S için son 120 veri, 1G için 500, 1H için 2000)
                             let limits = { '1S': 120, '1G': 500, '1H': 2000 };
                             let limit = limits[currentTimeframe] || 200;
                             
@@ -185,15 +179,10 @@
                 .catch(err => console.error("Veri çekme hatası:", err));
         }
 
-        // Sayfa açıldığında hafızadaki verileri hemen yükle
+        // Sayfa açılır açılmaz hafızadakini bas, sonra apiyi tetikle
         updateChartData();
-        
-        // Ardından API'den güncel veriyi çek
         fetchData();
-        
-        // Her 10 saniyede bir yeni veriyi kontrol et ve ekle
         setInterval(fetchData, 10000);
     </script>
 </body>
 </html>
-
