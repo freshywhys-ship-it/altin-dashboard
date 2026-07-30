@@ -49,15 +49,15 @@
             </div>
         </div>
 
-        <!-- Grafik Kartı (Doğru Gram Altın Sembolü) -->
+        <!-- Sorunsuz Çalışan TradingView Grafik Kartı -->
         <div class="chart-card">
             <div class="tradingview-widget-container">
                 <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
                 <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
                 {
                   "autosize": true,
-                  "symbol": "TVC:GOLD",
-                  "interval": "60",
+                  "symbol": "FX_IDC:XAUTRY",
+                  "interval": "D",
                   "timezone": "Europe/Istanbul",
                   "theme": "dark",
                   "style": "1",
@@ -89,13 +89,15 @@
                     document.getElementById('alis').innerText = d.alis + ' ₺';
                     document.getElementById('satis').innerText = d.satis + ' ₺';
                     document.getElementById('degisim').innerText = 'Değişim: ' + (d.degisim.startsWith('%') ? d.degisim : '%' + d.degisim);
-                    document.getElementById('zaman').innerText = d.guncelleme || 'Canlı';
+                    document.getElementById('zaman').innerText = d.guncelleme || 'Canlı Akış';
+                    
+                    let badge = document.getElementById('status-badge');
+                    badge.innerText = result.source || 'Canlı';
 
-                    // Fiyat değiştikçe kutunun rengini hafifçe parlatarak canlı olduğunu belli et
                     let boxAlis = document.getElementById('box-alis');
                     if (lastAlis > 0 && alisNum !== lastAlis) {
                         boxAlis.style.backgroundColor = alisNum > lastAlis ? '#1b4725' : '#471b1b';
-                        setTimeout(() => { boxAlis.style.backgroundColor = '#21262d'; }, 600);
+                        setTimeout(() => { boxAlis.style.backgroundColor = '#21262d'; }, 500);
                     }
                     lastAlis = alisNum;
                 }
@@ -105,7 +107,7 @@
         }
 
         fetchGoldData();
-        setInterval(fetchGoldData, 2000); // Her 2 saniyede bir sürekli güncellenir
+        setInterval(fetchGoldData, 1500); // Her 1.5 saniyede bir akışı yenile
     </script>
 </body>
 </html>
