@@ -54,11 +54,11 @@
             </div>
         </div>
 
-        <!-- Doğrudan Gerçek Fiyata Bağlı Canlı Grafik -->
+        <!-- Canlı Grafik -->
         <div class="chart-card">
             <div class="chart-header">
                 <span>Canlı Fiyat Grafiği</span>
-                <strong id="chart-current-price">6252.80 ₺</strong>
+                <strong id="chart-current-price">-- ₺</strong>
             </div>
             <canvas id="goldChart"></canvas>
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #8b949e; margin-top: 6px;">
@@ -95,7 +95,6 @@
             let h = canvas.height;
             let step = w / (priceHistory.length - 1);
 
-            // Çizgi Grafiği
             ctx.beginPath();
             ctx.strokeStyle = '#f0b429';
             ctx.lineWidth = 2.5;
@@ -110,7 +109,6 @@
             }
             ctx.stroke();
 
-            // Gradyan Dolgu
             let lastX = points[points.length - 1].x;
             ctx.lineTo(lastX, h);
             ctx.lineTo(0, h);
@@ -122,7 +120,6 @@
             ctx.fillStyle = gradient;
             ctx.fill();
 
-            // Son nokta parlama efekti
             let lastPoint = points[points.length - 1];
             ctx.beginPath();
             ctx.arc(lastPoint.x, lastPoint.y, 4.5, 0, Math.PI * 2);
@@ -146,7 +143,7 @@
                     document.getElementById('satis').innerText = d.satis + ' ₺';
                     document.getElementById('degisim').innerText = 'Değişim: ' + (d.degisim.startsWith('%') ? d.degisim : '%' + d.degisim);
                     document.getElementById('zaman').innerText = d.guncelleme || 'Canlı Akış';
-                    document.getElementById('chart-current-price.innerText = d.alis + ' ₺';
+                    document.getElementById('chart-current-price').innerText = d.alis + ' ₺';
 
                     let badge = document.getElementById('status-badge');
                     badge.innerText = result.source || 'Canlı';
@@ -158,9 +155,7 @@
                     }
                     lastAlis = alisNum;
 
-                    // Grafiğe ekle (İlk açılışta geçmişi doldurmak için simüle edelim veya anlık ekleyelim)
                     if (priceHistory.length === 0) {
-                        // İlk veri geldiğinde dalgalanma efekti için birkaç baz nokta atalım
                         priceHistory = [alisNum - 1, alisNum - 0.5, alisNum - 0.8, alisNum];
                     } else {
                         if (priceHistory[priceHistory.length - 1] !== alisNum) {
@@ -180,4 +175,3 @@
     </script>
 </body>
 </html>
-
