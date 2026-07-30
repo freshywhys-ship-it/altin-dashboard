@@ -1,52 +1,106 @@
+import json
 import os
-import random
-from flask import Flask, jsonify, render_template_string
+from datetime import datetime
+from flask import Flask, jsonify, render_template
 import requests
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-@app.route('/api/gold')
-def get_gold_data():
+HISTORY_FILE = "history.json"
+
+
+def load_history():
+  if os.path.exists(HISTORY_FILE):
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        response = requests.get("https://api.genelpara.com/embed/altin.json", headers=headers, timeout=3)
-        if response.status_code == 200:
-            data = response.json()
-            gram = data.get('GA', {})
-            alis = float(gram.get('alis', 0))
-            satis = float(gram.get('satis', 0))
-            if alis > 0:
-                return jsonify({
-                    'success': True,
-                    'source': 'Canlı',
-                    'data': {
-                        'alis': f"{alis:.2f}",
-                        'satis': f"{satis:.2f}",
-                        'degisim': str(gram.get('degisim', '0.50')),
-                        'guncelleme': str(gram.get('d_zaman', ''))
-                    }
-                })
-    except Exception:
-        pass
+      with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+    except:
+      pass
+  return {"1S": [], "1G": [], "1H": []}
 
-    base_alis = 6252.30 + round(random.uniform(-0.80, 0.80), 2)
-    base_satis = base_alis + 22.50
-    return jsonify({
-        'success': True,
-        'source': 'Canlı Akış',
-        'data': {
-            'alis': f"{base_alis:.2f}",
-            'satis': f"{base_satis:.2f}",
-            'degisim': '%0.72',
-            'guncelleme': 'Anlık'
-        }
-    })
 
-@app.route('/')
+def save_history(history):
+  try:
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+      json.dump(history, f, ensure_ascii=False, indent=4)
+  except:
+    pass
+
+
+# Sunucu açıldığında geçmişi yükle
+gold_history = load_history()
+
+
+def fetch_from_genelpara():
+  try:
+    url = "https://www.genelpara.com/altin-fiyatlari/gram-altin/"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, headers=headers, timeout=5)
+    if response.status_code == 200:
+      soup = BeautifulSoup(response.text, "html.parser")
+      alis = (
+          soup.find("span", {"id": "lblAlis"}).text.strip().replace(",", ".")
+      )
+      satis = (
+          soup.find("span", {"id": "lblSatis"}).text.strip().replace(",", ".")
+      )
+      degisim = (
+          soup.find("span", {"id": "lblDegisim"}).text.strip().replace(",", ".")
+      )
+      return {
+          "success": True,
+          "source": "Canlı (GenelPara)",
+          "data": {
+              "alis": alis,
+              "satis": satis,
+              "degisim": degisim,
+              "guncelleme": datetime.now().strftime("%H:%M:%S"),
+          },
+      }
+  except Exception as e:
+    print("API Hatası:", e)
+  return None
+
+
+@app.route("/")
 def index():
-    with open('index.html', 'r', encoding='utf-8') as f:
-        return render_template_string(f.read())
+  return render_template("index.html")
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+
+@app.route("/api/gold")
+def api_gold():
+  result = fetch_from_genelpara()
+  if not result:
+    # Yedek simülasyon verisi
+    result = {
+        "success": True,
+        "source": "Simülasyon",
+        "data": {
+            "alis": "6252.80",
+            "satis": "6275.30",
+            "degisim": "%0.72",
+            "guncelleme": datetime.now().strftime("%H:%M:%S"),
+        },
+    }
+
+  # Sunucu tarafında geçmişe yeni fiyatı ekle ve kaydet
+  alis_num = float(result["data"]["alis"])
+  global gold_history
+
+  for tf in ["1S", "1G", "1H"]:
+    if not gold_history[tf]:
+      gold_history[tf] = [alis_num]
+    else:
+      if gold_history[tf][-1] != alis_num:
+        gold_history[tf].append(alis_num)
+        if len(gold_history[tf]) > 50:  # Kayıt sınırı
+          gold_history[tf].pop(0)
+
+  save_history(gold_history)
+  result["history"] = gold_history
+  return jsonify(result)
+
+
+if __name__ == "__main__":
+  app.run(host="0.0.0.0", port=5000)
