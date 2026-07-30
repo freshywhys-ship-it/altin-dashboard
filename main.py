@@ -36,7 +36,7 @@ HTML_TEMPLATE = """
         <div class="price" id="alis-fiyat">Bağlanıyor...</div>
         <div>Satış: <span id="satis-fiyat">--</span> | Değişim: <span id="degisim">-%</span></div>
         <div style="font-size: 11px; color: #aaa; margin-top: 5px;" id="guncelleme">Son Güncelleme: --:--:--</div>
-        <div id="error-alert" class="error-msg">Canlı veri alınamadı, bağlantı bekleniyor...</div>
+        <div id="error-alert" class="error-msg">Canlı veri alınamadı, sunucu yanıtı bekleniyor...</div>
 
         <div class="stats">
             <div>En Düşük: <span id="min-fiyat" style="color:#f44336; font-weight:bold;">-- TL</span></div>
@@ -53,13 +53,13 @@ HTML_TEMPLATE = """
         </div>
 
         <canvas id="goldChart" width="400" height="220"></canvas>
-        <div class="hint">Gerçek Zamanlı Piyasa Takip Ekranı</div>
+        <div class="hint">Gerçek Zamanlı Piyasa Takip Paneli</div>
     </div>
 
     <script>
         let currentTimeframe = '1S';
         let chart;
-        const STORAGE_KEY = 'dunya_katilim_real_gold_v1';
+        const STORAGE_KEY = 'dunya_katilim_real_v2';
 
         function getStoredHistory() {
             try {
@@ -152,7 +152,7 @@ HTML_TEMPLATE = """
                         document.getElementById('degisim').innerText = result.degisim;
                         document.getElementById('guncelleme').innerText = "Son Güncelleme: " + result.guncelleme;
 
-                        let currentPrice = parseFloat(result.alis);
+                        let currentPrice = parseFloat(result.alis.replace('.', '').replace(',', '.'));
                         if (isNaN(currentPrice)) return;
 
                         let now = new Date();
@@ -162,7 +162,7 @@ HTML_TEMPLATE = """
                         let records = history[currentTimeframe] || [];
                         
                         let lastRecord = records[records.length - 1];
-                        // Sadece yeni bir veri noktası geldiğinde veya fiyat değiştiğinde kaydet
+                        // Sadece fiyat değiştiğinde veya yeni kayıt eklenecekse grafiğe işle
                         if (!lastRecord || lastRecord.price !== currentPrice || records.length === 0) {
                             records.push({ time: timeStr, price: currentPrice });
                             let limits = { '1S': 120, '1G': 500, '1H': 2000 };
@@ -178,14 +178,14 @@ HTML_TEMPLATE = """
                     }
                 })
                 .catch(err => {
-                    console.error("Veri çekme hatası:", err);
+                    console.error("Bağlantı hatası:", err);
                     document.getElementById('error-alert').style.display = 'block';
                 });
         }
 
         updateChartData();
         fetchData();
-        setInterval(fetchData, 10000); // Her 10 saniyede bir gerçek piyasayı sorgula
+        setInterval(fetchData, 10000);
     </script>
 </body>
 </html>
@@ -198,34 +198,33 @@ def index():
 @app.route('/api/gold')
 def get_gold_price():
     try:
-        # Harem Altın veya alternatif canlı finansal kaynakları sorgulama (Gerçek Piyasa API)
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get("https://hasircularaltin.com/api/prices", headers=headers, timeout=5) # veya genelpara/harem endpointleri
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
         
-        # Daha kararlı çalışan alternatif açık finans veri kaynağı (Kuyumcu/Borsa ortak akış)
-        fallback_res = requests.get("https://api.genelpara.com/embed/altin.json", headers=headers, timeout=5)
+        # Canlı ve güncel finans verisi sağlayan ana uç nokta
+        response = requests.get("https://api.genelpara.com/embed/altin.json", headers=headers, timeout=6)
         
-        if fallback_res.status_code == 200:
-            data = fallback_res.json()
+        if response.status_code == 200:
+            data = response.json()
             if 'GA' in data:
-                alis = float(data['GA']['alis'])
-                satis = float(data['GA']['satis'])
+                alis = data['GA']['alis']
+                satis = data['GA']['satis']
                 degisim = f"%{data['GA']['degisim']}"
                 simdi = datetime.now().strftime("%H:%M:%S")
                 
                 return jsonify({
                     "success": True,
-                    "source": "Canlı Borsa / Kuyumcu Akışı",
-                    "alis": f"{alis:.2f}",
-                    "satis": f"{satis:.2f}",
+                    "source": "Canlı Piyasa Akışı",
+                    "alis": str(alis),
+                    "satis": str(satis),
                     "degisim": degisim,
                     "guncelleme": simdi
                 })
         
-        raise Exception("Canlı piyasa verisine ulaşılamadı")
-    
+        raise Exception("API veri döndürmedi")
+
     except Exception as e:
-        # Halka açık sistemlerde yanlış veri basmak yerine hata döndürmek en güvenlisidir.
         return jsonify({
             "success": False,
             "error": str(e)
@@ -233,4 +232,3 @@ def get_gold_price():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
