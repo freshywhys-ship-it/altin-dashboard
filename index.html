@@ -46,15 +46,30 @@
         let currentTimeframe = '1S';
         let chart;
 
-        // LocalStorage'dan her zaman dilimi için ayrı geçmişi al
+        // LocalStorage'dan güvenli veri okuma (bozulma/patlamalara karşı korumalı)
         function getStoredHistory() {
-            let data = localStorage.getItem('gold_history_v2');
-            return data ? JSON.parse(data) : { '1S': [], '1G': [], '1H': [] };
+            try {
+                let data = localStorage.getItem('gold_history_v3');
+                if (!data) return { '1S': [], '1G': [], '1H': [] };
+                let parsed = JSON.parse(data);
+                // Eğer veri eski formatta veya hatalıysa sıfırla
+                if (typeof parsed !== 'object' || !parsed['1S']) {
+                    return { '1S': [], '1G': [], '1H': [] };
+                }
+                return parsed;
+            } catch (e) {
+                console.error("LocalStorage okuma hatası, sıfırlanıyor:", e);
+                return { '1S': [], '1G': [], '1H': [] };
+            }
         }
 
-        // Geçmişi kaydet
+        // Güvenli kayıt
         function saveStoredHistory(history) {
-            localStorage.setItem('gold_history_v2', JSON.stringify(history));
+            try {
+                localStorage.setItem('gold_history_v3', JSON.stringify(history));
+            } catch (e) {
+                console.error("LocalStorage kayıt hatası:", e);
+            }
         }
 
         const ctx = document.getElementById('goldChart').getContext('2d');
@@ -102,7 +117,7 @@
             
             chart.data.labels = records.map(item => item.time);
             chart.data.datasets[0].data = records.map(item => item.price);
-            chart.update('none'); // Sürekli yeniden çizilme efektini engellemek için akıcı update
+            chart.update('none');
         }
 
         function changeTimeframe(tf, btn) {
@@ -110,7 +125,7 @@
             document.querySelectorAll('.time-btns button').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             updateChartData();
-            chart.resetZoom(); // Zaman dilimi değiştiğinde zoomu sıfırla ki yeni grafik düzgün otursun
+            chart.resetZoom();
         }
 
         function resetZoom() {
@@ -121,7 +136,7 @@
             fetch('/api/gold')
                 .then(response => response.json())
                 .then(result => {
-                    if(result.success) {
+                    if(result && result.success) {
                         document.getElementById('source').innerText = "Kaynak: " + result.source;
                         document.getElementById('alis-fiyat').innerText = result.data.alis + " TL";
                         document.getElementById('satis-fiyat').innerText = result.data.satis + " TL";
@@ -130,19 +145,21 @@
 
                         let currentPrice = parseFloat(result.data.alis);
                         let currentTimeStr = result.data.guncelleme;
-                        let history = getStoredHistory();
+                        
+                        if (isNaN(currentPrice)) return;
 
-                        // Hangi zaman dilimindeysek oraya timestamp ve fiyatı bas
+                        let history = getStoredHistory();
                         let records = history[currentTimeframe] || [];
                         let lastRecord = records[records.length - 1];
 
-                        // Fiyat değiştiyse veya listede hiç veri yoksa ekle
+                        // Eğer yeni fiyat geldiyse veya listede hiç yoksa ekle
                         if (!lastRecord || lastRecord.price !== currentPrice) {
                             records.push({ time: currentTimeStr, price: currentPrice });
                             
-                            // Zaman dilimine göre veri limitleri (1 Saat için son 120 veri, 1 Gün için son 500 veri vb.)
                             let limits = { '1S': 120, '1G': 500, '1H': 2000 };
-                            if (records.length > limits[currentTimeframe]) {
+                            let limit = limits[currentTimeframe] || 200;
+                            
+                            if (records.length > limit) {
                                 records.shift();
                             }
                             
@@ -155,11 +172,11 @@
                 .catch(err => console.error("Veri çekme hatası:", err));
         }
 
-        // İlk açılış
+        // Sayfa açılır açılmaz hafızadaki verileri grafiğe bas ve veriyi çek
         updateChartData();
         fetchData();
         
-        // Her 10 saniyede bir arka planda veriyi güncelle
+        // Her 10 saniyede bir güncelle
         setInterval(fetchData, 10000);
     </script>
 </body>
