@@ -4,15 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gram Altın Takip Paneli</title>
+    <!-- Chart.js ve Zoom Eklentisi -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: #e0e0e0; text-align: center; margin: 0; padding: 20px; }
-        .card { background: #1e1e1e; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-bottom: 20px; width: 90%; max-width: 600px; }
+        .card { background: #1e1e1e; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-bottom: 20px; width: 90%; max-width: 700px; }
         .price { font-size: 28px; font-weight: bold; color: #4caf50; }
-        .buttons { margin: 15px 0; }
-        button { background: #333; color: #fff; border: 1px solid #555; padding: 10px 20px; cursor: pointer; border-radius: 5px; margin: 0 5px; font-weight: bold; }
+        .buttons { margin: 15px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .time-btns { display: flex; gap: 5px; }
+        button { background: #333; color: #fff; border: 1px solid #555; padding: 8px 15px; cursor: pointer; border-radius: 5px; font-weight: bold; }
         button.active { background: #4caf50; border-color: #4caf50; }
+        .btn-reset { background: #d32f2f; border-color: #f44336; font-size: 12px; padding: 8px 12px; }
         canvas { background: #181818; border-radius: 5px; padding: 10px; }
+        .hint { font-size: 11px; color: #777; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -25,27 +30,31 @@
         <div style="font-size: 11px; color: #aaa; margin-top: 5px;" id="guncelleme">Son Güncelleme: --:--:--</div>
 
         <div class="buttons">
-            <button class="active" onclick="changeTimeframe('1S', this)">1 Saat</button>
-            <button onclick="changeTimeframe('1G', this)">1 Gün</button>
-            <button onclick="changeTimeframe('1H', this)">1 Hafta</button>
+            <div class="time-btns">
+                <button class="active" onclick="changeTimeframe('1S', this)">1 Saat</button>
+                <button onclick="changeTimeframe('1G', this)">1 Gün</button>
+                <button onclick="changeTimeframe('1H', this)">1 Hafta</button>
+            </div>
+            <button class="btn-reset" onclick="resetZoom()">Sıfırla / Zoom Kapat</button>
         </div>
 
-        <canvas id="goldChart" width="400" height="200"></canvas>
+        <canvas id="goldChart" width="400" height="220"></canvas>
+        <div class="hint">İpucu: Grafikte fare tekerleğiyle yakınlaşabilir, tıklayıp sürükleyerek geçmişte gezinebilirsin.</div>
     </div>
 
     <script>
         let currentTimeframe = '1S';
         let chart;
 
-        // LocalStorage'dan geçmiş verileri al veya boş başlat
+        // LocalStorage'dan her zaman dilimi için ayrı geçmişi al
         function getStoredHistory() {
-            let data = localStorage.getItem('gold_history');
+            let data = localStorage.getItem('gold_history_v2');
             return data ? JSON.parse(data) : { '1S': [], '1G': [], '1H': [] };
         }
 
-        // Geçmiş verileri LocalStorage'a kaydet
+        // Geçmişi kaydet
         function saveStoredHistory(history) {
-            localStorage.setItem('gold_history', JSON.stringify(history));
+            localStorage.setItem('gold_history_v2', JSON.stringify(history));
         }
 
         const ctx = document.getElementById('goldChart').getContext('2d');
@@ -59,32 +68,53 @@
                     borderColor: '#4caf50',
                     borderWidth: 2,
                     pointRadius: 2,
-                    tension: 0.1
+                    tension: 0.1,
+                    fill: true,
+                    backgroundColor: 'rgba(76, 175, 80, 0.05)'
                 }]
             },
             options: {
                 responsive: true,
                 scales: {
-                    x: { ticks: { color: '#aaa' }, grid: { color: '#222' } },
+                    x: { ticks: { color: '#aaa', maxTicksLimit: 8 }, grid: { color: '#222' } },
                     y: { ticks: { color: '#aaa' }, grid: { color: '#222' } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    zoom: {
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'xy',
+                        },
+                        pan: {
+                            enabled: true,
+                            mode: 'xy',
+                        }
+                    }
                 }
             }
         });
 
         function updateChartData() {
             let history = getStoredHistory();
-            let prices = history[currentTimeframe] || [];
+            let records = history[currentTimeframe] || [];
             
-            chart.data.labels = prices.map((_, index) => index + 1);
-            chart.data.datasets[0].data = prices;
-            chart.update();
+            chart.data.labels = records.map(item => item.time);
+            chart.data.datasets[0].data = records.map(item => item.price);
+            chart.update('none'); // Sürekli yeniden çizilme efektini engellemek için akıcı update
         }
 
         function changeTimeframe(tf, btn) {
             currentTimeframe = tf;
-            document.querySelectorAll('.buttons button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.time-btns button').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             updateChartData();
+            chart.resetZoom(); // Zaman dilimi değiştiğinde zoomu sıfırla ki yeni grafik düzgün otursun
+        }
+
+        function resetZoom() {
+            chart.resetZoom();
         }
 
         function fetchData() {
@@ -99,32 +129,38 @@
                         document.getElementById('guncelleme').innerText = "Son Güncelleme: " + result.data.guncelleme;
 
                         let currentPrice = parseFloat(result.data.alis);
+                        let currentTimeStr = result.data.guncelleme;
                         let history = getStoredHistory();
 
-                        // Seçili zaman dilimleri için son fiyatı ekle (aynı değilse)
-                        ['1S', '1G', '1H'].forEach(tf => {
-                            if (!history[tf]) history[tf] = [];
-                            let lastPrice = history[tf][history[tf].length - 1];
-                            
-                            if (lastPrice !== currentPrice) {
-                                history[tf].push(currentPrice);
-                                // Maksimum kayıt sınırları (örneğin her zaman dilimi için son 50 veri)
-                                if (history[tf].length > 50) history[tf].shift();
-                            }
-                        });
+                        // Hangi zaman dilimindeysek oraya timestamp ve fiyatı bas
+                        let records = history[currentTimeframe] || [];
+                        let lastRecord = records[records.length - 1];
 
-                        saveStoredHistory(history);
-                        updateChartData();
+                        // Fiyat değiştiyse veya listede hiç veri yoksa ekle
+                        if (!lastRecord || lastRecord.price !== currentPrice) {
+                            records.push({ time: currentTimeStr, price: currentPrice });
+                            
+                            // Zaman dilimine göre veri limitleri (1 Saat için son 120 veri, 1 Gün için son 500 veri vb.)
+                            let limits = { '1S': 120, '1G': 500, '1H': 2000 };
+                            if (records.length > limits[currentTimeframe]) {
+                                records.shift();
+                            }
+                            
+                            history[currentTimeframe] = records;
+                            saveStoredHistory(history);
+                            updateChartData();
+                        }
                     }
                 })
                 .catch(err => console.error("Veri çekme hatası:", err));
         }
 
-        // Sayfa açıldığında ve her 10 saniyede bir veriyi güncelle
-        fetchData();
-        setInterval(fetchData, 10000);
+        // İlk açılış
         updateChartData();
+        fetchData();
+        
+        // Her 10 saniyede bir arka planda veriyi güncelle
+        setInterval(fetchData, 10000);
     </script>
 </body>
 </html>
-
