@@ -25,7 +25,6 @@
         .chart-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #8b949e; margin-bottom: 8px; }
         .chart-header strong { color: #f0b429; font-size: 14px; }
         
-        /* Zaman Dilimi Butonları */
         .timeframes { display: flex; gap: 6px; margin-bottom: 10px; background: #21262d; padding: 4px; border-radius: 8px; border: 1px solid #30363d; }
         .tf-btn { flex: 1; background: transparent; border: none; color: #8b949e; font-size: 11px; font-weight: 600; padding: 5px 0; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center; }
         .tf-btn.active { background: #30363d; color: #f0b429; }
@@ -61,7 +60,7 @@
             </div>
         </div>
 
-        <!-- Detaylı Keskin Çizgili Grafik -->
+        <!-- Grafik Kartı -->
         <div class="chart-card">
             <div class="chart-header">
                 <span>Canlı Piyasa Grafiği</span>
@@ -80,7 +79,7 @@
 
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #8b949e; margin-top: 6px;">
                 <span id="min-max-info">Min: -- | Max: --</span>
-                <span style="color: #238636; font-weight: 600;">● Keskin Hatlı Akış</span>
+                <span style="color: #238636; font-weight: 600;">● Sunucu Hafızası Aktif</span>
             </div>
         </div>
     </div>
@@ -88,13 +87,7 @@
     <script>
         let lastAlis = 0;
         let currentTimeframe = '1S';
-        
-        // Zaman dilimlerine göre veri havuzları
-        let historyData = {
-            '1S': [],
-            '1G': [],
-            '1H': []
-        };
+        let historyData = { '1S': [], '1G': [], '1H': [] };
 
         const canvas = document.getElementById('goldChart');
         const ctx = canvas.getContext('2d');
@@ -134,7 +127,7 @@
             let chartHeight = height - paddingTop - paddingBottom;
             let step = width / (priceHistory.length - 1);
 
-            // Arka plan ızgarası (Grid)
+            // Grid Çizgileri
             ctx.strokeStyle = 'rgba(48, 54, 61, 0.4)';
             ctx.lineWidth = 1;
             let gridLines = 4;
@@ -159,7 +152,7 @@
                 points.push({x, y});
             }
 
-            // KESKİN HATLARK (Düz bağlantı - lineTo)
+            // Keskin Hatlar
             ctx.beginPath();
             ctx.strokeStyle = '#f0b429';
             ctx.lineWidth = 2;
@@ -170,7 +163,7 @@
             }
             ctx.stroke();
 
-            // Alt Alan Gradyan Dolgusu
+            // Gradyan Dolgu
             ctx.lineTo(points[points.length - 1].x, height);
             ctx.lineTo(points[0].x, height);
             ctx.closePath();
@@ -181,7 +174,7 @@
             ctx.fillStyle = gradient;
             ctx.fill();
 
-            // Son noktaya parlayan işaretçi
+            // Son Nokta İşaretçisi
             let lastPoint = points[points.length - 1];
             ctx.beginPath();
             ctx.arc(lastPoint.x, lastPoint.y, 4.5, 0, Math.PI * 2);
@@ -217,19 +210,10 @@
                     }
                     lastAlis = alisNum;
 
-                    // Tüm zaman dilimleri için başlangıç verilerini doldur veya güncelle
-                    ['1S', '1G', '1H'].forEach(tf => {
-                        if (historyData[tf].length === 0) {
-                            // Başlangıçta gerçekçi bir dağılım simüle edelim
-                            historyData[tf] = [alisNum - 1.2, alisNum - 0.4, alisNum - 0.9, alisNum];
-                        } else {
-                            let arr = historyData[tf];
-                            if (arr[arr.length - 1] !== alisNum) {
-                                arr.push(alisNum);
-                                if (arr.length > 35) arr.shift();
-                            }
-                        }
-                    });
+                    // Sunucudan gelen kalıcı geçmişi al
+                    if (result.history) {
+                        historyData = result.history;
+                    }
 
                     drawChart();
                 }
@@ -243,3 +227,4 @@
     </script>
 </body>
 </html>
+
