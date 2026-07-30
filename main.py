@@ -4,8 +4,8 @@ import requests
 
 app = Flask(__name__)
 
-# Finans Truncgil API adresi
-API_URL = "https://finans.truncgil.com/today.json"
+# Alternatif ve doğrudan çalışan altın API kaynağı
+API_URL = "https://api.genelpara.com/embed/altin.json"
 
 @app.route('/api/gold')
 def get_gold_data():
@@ -18,23 +18,38 @@ def get_gold_data():
         
         data = response.json()
         
-        # Gram Altın verisini çek
-        gram_altin = data.get('Gram Altın', {})
+        # Gram Altın (GA) verisini çek
+        gram_altin = data.get('GA', {})
         
         return jsonify({
             'success': True,
             'data': {
-                'alis': gram_altin.get('Alış', '0'),
-                'satis': gram_altin.get('Satış', '0'),
-                'degisim': gram_altin.get('Değişim', '0%'),
-                'guncelleme': data.get('Update_Date', '')
+                'alis': gram_altin.get('alis', '0'),
+                'satis': gram_altin.get('satis', '0'),
+                'degisim': gram_altin.get('degisim', '%0.00'),
+                'guncelleme': gram_altin.get('d_zaman', '')
             }
         })
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        # Alternatif fallback (Trunçgil yapısını string temizleme ile dene)
+        try:
+            fallback_res = requests.get("https://finans.truncgil.com/today.json", headers=headers, timeout=10)
+            f_data = fallback_res.json()
+            ga = f_data.get('Gram Altın', {})
+            return jsonify({
+                'success': True,
+                'data': {
+                    'alis': ga.get('Alış', '0').replace('.', '').replace(',', '.'),
+                    'satis': ga.get('Satış', '0').replace('.', '').replace(',', '.'),
+                    'degisim': ga.get('Değişim', '0%'),
+                    'guncelleme': f_data.get('Update_Date', '')
+                }
+            })
+        except Exception as inner_e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
 
 @app.route('/')
 def index():
@@ -46,6 +61,5 @@ def index():
         return f"index.html okunurken hata oluştu: {str(e)}", 500
 
 if __name__ == '__main__':
-    # Render portalının dinamik port ataması için PORT ortam değişkenini dinler
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
