@@ -1,9 +1,13 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 
 app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 @app.route('/api/gold')
 def get_gold_price():
@@ -23,14 +27,13 @@ def get_gold_price():
                 text = el.get_text()
                 if 'XAU' in text and 'Alış' in text:
                     parts = text.split()
-                    # Örnek yapıdan alış ve satış fiyatlarını ayıklıyoruz
                     for i, p in enumerate(parts):
                         if 'Alış' in p and i + 1 < len(parts):
                             alis_fiyat = parts[i+1].replace('.', '').replace(',', '.')
                         if 'Satış' in p and i + 1 < len(parts):
                             satis_fiyat = parts[i+1].replace('.', '').replace(',', '.')
 
-            # Eğer siteden doğrudan çekemezse güncel baz kuru koruması
+            # Yedek baz kur koruması
             if alis_fiyat == "0.00":
                 alis_fiyat = "6202.58"
                 satis_fiyat = "6232.87"
