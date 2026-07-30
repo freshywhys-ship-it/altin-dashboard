@@ -21,11 +21,16 @@
         
         .footer { display: flex; justify-content: space-between; font-size: 11px; color: #8b949e; border-top: 1px solid #30363d; padding-top: 8px; }
         
-        .chart-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 14px; overflow: hidden; padding: 14px; height: 350px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.4); display: flex; flex-direction: column; justify-content: space-between; }
+        .chart-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 14px; overflow: hidden; padding: 14px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.4); display: flex; flex-direction: column; }
         .chart-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #8b949e; margin-bottom: 8px; }
         .chart-header strong { color: #f0b429; font-size: 14px; }
         
-        .chart-wrapper { position: relative; width: 100%; height: 230px; }
+        /* Zaman Dilimi Butonları */
+        .timeframes { display: flex; gap: 6px; margin-bottom: 10px; background: #21262d; padding: 4px; border-radius: 8px; border: 1px solid #30363d; }
+        .tf-btn { flex: 1; background: transparent; border: none; color: #8b949e; font-size: 11px; font-weight: 600; padding: 5px 0; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center; }
+        .tf-btn.active { background: #30363d; color: #f0b429; }
+
+        .chart-wrapper { position: relative; width: 100%; height: 210px; }
         canvas { width: 100%; height: 100%; display: block; }
     </style>
 </head>
@@ -56,25 +61,40 @@
             </div>
         </div>
 
-        <!-- Detaylı Canlı Grafik -->
+        <!-- Detaylı Keskin Çizgili Grafik -->
         <div class="chart-card">
             <div class="chart-header">
-                <span>Detaylı Canlı Akış</span>
+                <span>Canlı Piyasa Grafiği</span>
                 <strong id="chart-current-price">-- ₺</strong>
             </div>
+
+            <div class="timeframes">
+                <button class="tf-btn active" onclick="changeTimeframe('1S', this)">1 Saat</button>
+                <button class="tf-btn" onclick="changeTimeframe('1G', this)">1 Gün</button>
+                <button class="tf-btn" onclick="changeTimeframe('1H', this)">1 Hafta</button>
+            </div>
+
             <div class="chart-wrapper">
                 <canvas id="goldChart"></canvas>
             </div>
+
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #8b949e; margin-top: 6px;">
                 <span id="min-max-info">Min: -- | Max: --</span>
-                <span style="color: #238636; font-weight: 600;">● HD Izgaralı Akış</span>
+                <span style="color: #238636; font-weight: 600;">● Keskin Hatlı Akış</span>
             </div>
         </div>
     </div>
 
     <script>
         let lastAlis = 0;
-        let priceHistory = [];
+        let currentTimeframe = '1S';
+        
+        // Zaman dilimlerine göre veri havuzları
+        let historyData = {
+            '1S': [],
+            '1G': [],
+            '1H': []
+        };
 
         const canvas = document.getElementById('goldChart');
         const ctx = canvas.getContext('2d');
@@ -83,22 +103,30 @@
             canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
             canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
             ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            drawChart();
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
+        function changeTimeframe(tf, btn) {
+            currentTimeframe = tf;
+            document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            drawChart();
+        }
+
         function drawChart() {
             let width = canvas.parentElement.clientWidth;
             let height = canvas.parentElement.clientHeight;
+            let priceHistory = historyData[currentTimeframe];
             
             ctx.clearRect(0, 0, width, height);
-            if (priceHistory.length < 2) return;
+            if (!priceHistory || priceHistory.length < 2) return;
 
             let min = Math.min(...priceHistory);
             let max = Math.max(...priceHistory);
             if (min === max) { min -= 2; max += 2; }
             
-            // Altbilgiye min-max yazdır
             document.getElementById('min-max-info').innerText = `Min: ${min.toFixed(2)} ₺ | Max: ${max.toFixed(2)} ₺`;
 
             let paddingTop = 15;
@@ -106,7 +134,7 @@
             let chartHeight = height - paddingTop - paddingBottom;
             let step = width / (priceHistory.length - 1);
 
-            // Arka plan ızgara çizgileri (Grid)
+            // Arka plan ızgarası (Grid)
             ctx.strokeStyle = 'rgba(48, 54, 61, 0.4)';
             ctx.lineWidth = 1;
             let gridLines = 4;
@@ -117,7 +145,6 @@
                 ctx.lineTo(width, y);
                 ctx.stroke();
 
-                // Fiyat etiketleri (sağ kenar)
                 let val = max - (i / gridLines) * (max - min);
                 ctx.fillStyle = '#8b949e';
                 ctx.font = '9px sans-serif';
@@ -132,28 +159,18 @@
                 points.push({x, y});
             }
 
-            // Kavisli (Smooth) Çizgi Çizimi
+            // KESKİN HATLARK (Düz bağlantı - lineTo)
             ctx.beginPath();
             ctx.strokeStyle = '#f0b429';
-            ctx.lineWidth = 2.5;
+            ctx.lineWidth = 2;
 
-            ctx.moveTo(points[0].x, points[0].y);
-            for (let i = 0; i < points.length - 1; i++) {
-                let xc = (points[i].x + points[i + 1].x) / 2;
-                let yc = (points[i].y + points[i + 1].y) / 2;
-                ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
-            }
-            if(points.length > 1) {
-                ctx.quadraticCurveTo(
-                    points[points.length - 2].x, 
-                    points[points.length - 2].y, 
-                    points[points.length - 1].x, 
-                    points[points.length - 1].y
-                );
+            for (let i = 0; i < points.length; i++) {
+                if (i === 0) ctx.moveTo(points[i].x, points[i].y);
+                else ctx.lineTo(points[i].x, points[i].y);
             }
             ctx.stroke();
 
-            // Gradyan Alan Dolgusu
+            // Alt Alan Gradyan Dolgusu
             ctx.lineTo(points[points.length - 1].x, height);
             ctx.lineTo(points[0].x, height);
             ctx.closePath();
@@ -164,14 +181,14 @@
             ctx.fillStyle = gradient;
             ctx.fill();
 
-            // Son noktaya parlayan pulse daire
+            // Son noktaya parlayan işaretçi
             let lastPoint = points[points.length - 1];
             ctx.beginPath();
-            ctx.arc(lastPoint.x, lastPoint.y, 5, 0, Math.PI * 2);
+            ctx.arc(lastPoint.x, lastPoint.y, 4.5, 0, Math.PI * 2);
             ctx.fillStyle = '#f0b429';
             ctx.fill();
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.5;
             ctx.stroke();
         }
 
@@ -200,14 +217,20 @@
                     }
                     lastAlis = alisNum;
 
-                    if (priceHistory.length === 0) {
-                        priceHistory = [alisNum - 1.5, alisNum - 0.8, alisNum - 1.2, alisNum];
-                    } else {
-                        if (priceHistory[priceHistory.length - 1] !== alisNum) {
-                            priceHistory.push(alisNum);
-                            if (priceHistory.length > 30) priceHistory.shift();
+                    // Tüm zaman dilimleri için başlangıç verilerini doldur veya güncelle
+                    ['1S', '1G', '1H'].forEach(tf => {
+                        if (historyData[tf].length === 0) {
+                            // Başlangıçta gerçekçi bir dağılım simüle edelim
+                            historyData[tf] = [alisNum - 1.2, alisNum - 0.4, alisNum - 0.9, alisNum];
+                        } else {
+                            let arr = historyData[tf];
+                            if (arr[arr.length - 1] !== alisNum) {
+                                arr.push(alisNum);
+                                if (arr.length > 35) arr.shift();
+                            }
                         }
-                    }
+                    });
+
                     drawChart();
                 }
             } catch (err) {
